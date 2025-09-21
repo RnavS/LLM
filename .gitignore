@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.venv/
+venv/
+llm-env/
+
+# Notebooks and checkpoints
+.ipynb_checkpoints/
+
+# Data, logs, outputs
+*.log
+output.txt
+
+# Model weights / artifacts
+*.pth
+*.pt
+*.pkl
