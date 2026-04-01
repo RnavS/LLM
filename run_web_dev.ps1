@@ -16,7 +16,7 @@ if (-not (Test-Path ".env")) {
 }
 
 & $VenvPython -m pip install --upgrade pip
-& $VenvPython -m pip install -r requirements.txt
+& $VenvPython -m pip install -r requirements-local.txt
 
 if ($OpenBrowser) {
     Start-Job -ScriptBlock {

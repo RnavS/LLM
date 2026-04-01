@@ -68,8 +68,10 @@ Use Python 3.12 if possible:
 py -3.12 -m venv .venv312
 .venv312\Scripts\Activate.ps1
 py -m pip install --upgrade pip
-py -m pip install -r requirements.txt
+py -m pip install -r requirements-local.txt
 ```
+
+For cloud or serverless deployment, `requirements.txt` is intentionally minimal and does not install the local PyTorch checkpoint runtime. Use `requirements-local.txt` when you want local training or the custom checkpoint backend.
 
 ## Run The Website
 
@@ -142,7 +144,7 @@ For a zero-budget public deployment:
 6. Set `LLM_PROVIDER_BASE_URL`, `LLM_PROVIDER_API_KEY`, and `LLM_PROVIDER_MODEL` for your hosted OpenAI-compatible provider.
 7. Set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and a strong `LLM_SESSION_SECRET`.
 8. Set `LLM_ALLOW_ORIGINS` to your deployed HTTPS domain.
-9. Deploy the repo with the included `Dockerfile` on a Docker-compatible host such as Hugging Face Spaces.
+9. Deploy the repo on a host that can run FastAPI, such as Vercel or a Docker-compatible host.
 10. After the site is live, go back through the Supabase production checklist: stronger auth protections, SMTP if you keep email flows, and auth rate-limit review.
 
 The website stays same-origin, the backend keeps the provider key on the server, and end users never talk directly to Supabase or the model provider from the browser.
@@ -154,6 +156,14 @@ For Hugging Face Spaces specifically:
 3. Add the same environment variables from `.env.example` as Space secrets.
 4. Keep the app listening on port `7860` inside the container. The included `Dockerfile` already does this.
 5. Use the default `*.hf.space` URL for a free launch. If you want a custom branded domain, budget for a domain purchase and a hosting plan that supports custom domains for your setup.
+
+For Vercel specifically:
+
+1. Keep the FastAPI entrypoint at the repository root in `app.py`.
+2. Connect the GitHub repository to your Vercel project.
+3. Add the production environment variables in the Vercel project settings.
+4. Redeploy after every environment variable change.
+5. If you use only hosted inference in production, keep `LLM_MODEL_BACKEND=hosted_api` and do not install the local checkpoint dependencies on Vercel.
 
 ## Building The Local Knowledge Index
 
@@ -168,6 +178,12 @@ py retrieval.py build `
 ## Training
 
 The original toy training stack is still present for experimentation, but production MedBrief answers should use the stronger local runtime path by default.
+
+Install local runtime dependencies first if you want training or checkpoint inference:
+
+```powershell
+py -m pip install -r requirements-local.txt
+```
 
 If you still want to train the small local checkpoint:
 

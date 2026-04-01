@@ -5,7 +5,7 @@ if (-not (Test-Path $python)) {
     py -3.12 -m venv .venv312
 }
 
-& $python -m pip install -r requirements.txt
+& $python -m pip install -r requirements-local.txt
 & $python retrieval.py build --knowledge-dir data/knowledge --output data/index/knowledge_index.pkl --chunk-words 350 --overlap-words 50
 & $python train.py `
   --input cleaned_data.txt `

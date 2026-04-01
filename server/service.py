@@ -9,12 +9,133 @@ import numpy as np
 from grounding import build_grounded_reply, extract_focus_phrase
 from presets import DEFAULT_SYSTEM_PRESET, SYSTEM_PROMPTS, asks_for_dosing, build_query_safety_instruction, classify_query_mode, get_generation_defaults, get_system_prompt, has_red_flag_symptoms, is_crisis_query, wants_advice
 from retrieval import KnowledgeIndex, STOPWORDS
-from runtime import AssistantRuntime, _build_retrieval_fallback, _should_prefer_retrieval_fallback, complete_messages, load_runtime
 from server.hosted_provider_client import HostedProviderClient
 from server.ollama_client import OllamaClient
 from server.settings import ServerSettings
 from utils import resolve_checkpoint_path
 from web_research import WebResearchClient
+
+try:
+    from runtime import AssistantRuntime, _build_retrieval_fallback, _should_prefer_retrieval_fallback, complete_messages, load_runtime
+    _RUNTIME_IMPORT_ERROR: Exception | None = None
+except Exception as exc:
+    AssistantRuntime = Any
+    _RUNTIME_IMPORT_ERROR = exc
+
+    def _looks_low_quality(reply: str) -> bool:
+        cleaned = reply.strip()
+        if len(cleaned) < 24:
+            return True
+        if "\ufffd" in cleaned or "</" in cleaned:
+            return True
+        words = re.findall(r"[a-zA-Z0-9']+", cleaned.lower())
+        if len(words) < 6:
+            return True
+        unique_ratio = len(set(words)) / max(1, len(words))
+        if unique_ratio < 0.35:
+            return True
+        alpha_chars = sum(character.isalpha() for character in cleaned)
+        if alpha_chars / max(1, len(cleaned)) < 0.55:
+            return True
+        return False
+
+    def _content_terms(text: str) -> set[str]:
+        return {
+            term
+            for term in re.findall(r"[a-zA-Z0-9']+", text.lower())
+            if term not in STOPWORDS and len(term) > 2
+        }
+
+    def _is_direct_information_query(text: str) -> bool:
+        lowered = text.lower().strip()
+        return any(
+            lowered.startswith(prefix)
+            for prefix in (
+                "what is",
+                "what are",
+                "how does",
+                "how do",
+                "explain",
+                "define",
+                "tell me about",
+                "why does",
+                "why do",
+            )
+        )
+
+    def _should_prefer_retrieval_fallback(
+        user_text: str,
+        reply: str,
+        used_context: Sequence[dict[str, str | float]],
+    ) -> bool:
+        if not used_context:
+            return False
+        if _looks_low_quality(reply):
+            return True
+
+        query_terms = _content_terms(user_text)
+        reply_terms = _content_terms(reply)
+        context_terms = _content_terms(" ".join(str(chunk.get("text", "")) for chunk in used_context))
+
+        shared_query_terms = query_terms.intersection(reply_terms)
+        shared_context_terms = context_terms.intersection(reply_terms)
+
+        if asks_for_dosing(user_text) or has_red_flag_symptoms(user_text):
+            return len(shared_query_terms) == 0
+
+        if _is_direct_information_query(user_text) and len(shared_query_terms) == 0:
+            return True
+
+        if len(shared_query_terms) == 0 and len(shared_context_terms) == 0:
+            return True
+
+        return False
+
+    def _build_retrieval_fallback(user_text: str, used_context: Sequence[dict[str, str | float]]) -> str:
+        sentences = []
+        query_terms = {
+            term
+            for term in re.findall(r"[a-zA-Z0-9']+", user_text.lower())
+            if term not in STOPWORDS
+        }
+        wants_dosing = asks_for_dosing(user_text)
+        red_flag = has_red_flag_symptoms(user_text)
+        for chunk in used_context:
+            for sentence in re.split(r"(?<=[.!?])\s+", str(chunk.get("text", ""))):
+                sentence = sentence.strip()
+                if not sentence:
+                    continue
+                sentence_terms = set(re.findall(r"[a-zA-Z0-9']+", sentence.lower()))
+                score = len(query_terms.intersection(sentence_terms))
+                lowered_sentence = sentence.lower()
+                if wants_dosing and any(term in lowered_sentence for term in ["dose", "dosing", "medication", "prescription", "drug"]):
+                    score += 4
+                if red_flag and any(term in lowered_sentence for term in ["emergency", "urgent", "immediate", "seek care"]):
+                    score += 4
+                if score <= 0:
+                    continue
+                sentences.append((score, sentence))
+        sentences.sort(key=lambda item: item[0], reverse=True)
+        selected = []
+        seen = set()
+        for _, sentence in sentences:
+            if sentence in seen:
+                continue
+            seen.add(sentence)
+            selected.append(sentence)
+            if len(selected) == 2:
+                break
+        return " ".join(selected).strip()
+
+    def load_runtime(*args, **kwargs):
+        raise RuntimeError(
+            "Local checkpoint runtime dependencies are not installed. Install requirements-local.txt to use the local model backend."
+        ) from _RUNTIME_IMPORT_ERROR
+
+    def complete_messages(*args, **kwargs):
+        raise RuntimeError(
+            "Local checkpoint runtime dependencies are not installed. Install requirements-local.txt to use the local model backend."
+        ) from _RUNTIME_IMPORT_ERROR
 
 
 FOLLOW_UP_ONLY_TERMS = {

@@ -48,7 +48,7 @@ if (-not (Test-Path ".env")) {
 }
 
 & $VenvPython -m pip install --upgrade pip
-& $VenvPython -m pip install -r requirements.txt
+& $VenvPython -m pip install -r requirements-local.txt
 
 Write-Host "Launching MedBrief AI at http://127.0.0.1:8000" -ForegroundColor Cyan
 Write-Host "The website opens directly and stores session state in the browser cookie." -ForegroundColor DarkCyan
