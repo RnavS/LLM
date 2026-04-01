@@ -1,61 +1,61 @@
-from model import TinyTransformer, block_size, embedding_dim
-from utils import load_data, make_vocab, encode, decode, restore_text
-import torch
-import pickle
+from __future__ import annotations
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+import argparse
+from pathlib import Path
 
-with open("vocab.pkl", "rb") as f:
-    stringtoindex, indextostring = pickle.load(f)
+from presets import DEFAULT_SYSTEM_PRESET, SYSTEM_PROMPTS
+from runtime import generate_reply, load_runtime
+from utils import configure_console_output
 
-vocab_size = len(stringtoindex)
-model = TinyTransformer(vocab_size, embedding_dim, block_size).to(device)
-model.load_state_dict(torch.load("model.pth", map_location=device))
-model.eval()
 
-@torch.inference_mode()
-def generate(model, prompt, max_tokens=150, temperature=0.8, top_k=40, top_p=0.9, repetition_penalty=1.2):
-    context = torch.tensor(encode(prompt, stringtoindex), dtype=torch.long).unsqueeze(0).to(device)
-    generated = context
+def build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Single-turn generation using the local chatbot checkpoint.")
+    parser.add_argument("--checkpoint", default="checkpoints/local_chatbot")
+    parser.add_argument("--tokenizer-model", default="")
+    parser.add_argument("--prompt", default="", help="User message to send to the model.")
+    parser.add_argument("--system-preset", default=DEFAULT_SYSTEM_PRESET, choices=sorted(SYSTEM_PROMPTS))
+    parser.add_argument("--system-prompt", default="")
+    parser.add_argument("--knowledge-index", default="data/index/knowledge_index.pkl")
+    parser.add_argument("--retrieval-top-k", type=int, default=4)
+    parser.add_argument("--disable-retrieval", action="store_true")
+    parser.add_argument("--max-new-tokens", type=int, default=None)
+    parser.add_argument("--temperature", type=float, default=None)
+    parser.add_argument("--top-k", type=int, default=None)
+    parser.add_argument("--top-p", type=float, default=None)
+    parser.add_argument("--repetition-penalty", type=float, default=None)
+    parser.add_argument("--device", default="auto")
+    return parser
 
-    for _ in range(max_tokens):
-        idx_condensed = generated[:, -block_size:]
-        logits = model(idx_condensed)
-        logits = logits[:, -1, :] / temperature
 
-        for token_id in set(generated[0].tolist()):
-            logits[0, token_id] /= repetition_penalty
+def main() -> None:
+    configure_console_output()
+    args = build_arg_parser().parse_args()
+    if not args.prompt:
+        args.prompt = input("User prompt: ").strip()
 
-        probs = torch.softmax(logits, dim=-1)
+    runtime = load_runtime(
+        checkpoint=args.checkpoint,
+        tokenizer_model=args.tokenizer_model,
+        device_name=args.device,
+        system_preset=args.system_preset,
+        system_prompt=args.system_prompt,
+        max_new_tokens=args.max_new_tokens,
+        temperature=args.temperature,
+        top_k=args.top_k,
+        top_p=args.top_p,
+        repetition_penalty=args.repetition_penalty,
+        knowledge_index_path=args.knowledge_index,
+        retrieval_top_k=args.retrieval_top_k,
+        disable_retrieval=args.disable_retrieval,
+    )
 
-        if top_k:
-            top_probs, top_idx = torch.topk(probs, k=top_k)
-            probs = torch.zeros_like(probs).scatter(1, top_idx, top_probs)
-            probs /= probs.sum(dim=-1, keepdim=True)
+    result = generate_reply(runtime, args.prompt, history=[])
+    print(f"Loaded checkpoint: {runtime.checkpoint_path}")
+    if result["used_context"]:
+        source_names = ", ".join(sorted({Path(str(chunk['source'])).name for chunk in result["used_context"]}))
+        print(f"Sources: {source_names}")
+    print(f"Reply:\n{result['reply']}")
 
-        if top_p and top_p < 1.0:
-            sorted_probs, sorted_idx = torch.sort(probs, descending=True)
-            cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
-            cutoff = cumulative_probs > top_p
 
-            if torch.any(cutoff):
-                cutoff_idx = cutoff.nonzero()[0][0] + 1
-                sorted_probs = sorted_probs[:, :cutoff_idx]
-                sorted_idx = sorted_idx[:, :cutoff_idx]
-                probs = torch.zeros_like(probs).scatter(1, sorted_idx, sorted_probs)
-                probs /= probs.sum(dim=-1, keepdim=True)
-
-        next_token = torch.multinomial(probs, num_samples=1)
-        generated = torch.cat([generated, next_token], dim=1)
-
-    raw_output = decode(generated[0].tolist(), indextostring)
-    return restore_text(raw_output.split())
-
-prompt = input("Enter a prompt: ")
-output = generate(model, prompt, max_tokens=150, temperature=0.6, top_k=40, top_p=0.9, repetition_penalty=1.1)
-
-print("\n--- Generated Output ---\n")
-print(output)
-
-with open("output.txt", "w") as f:
-    f.write(f"Prompt: {prompt}\n\nGenerated:\n{output}\n")
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MedBrief AI — Intelligent Medical Companion</title>
+  <meta name="description" content="MedBrief AI is a premium intelligent assistant for healthcare insights, wellness guidance, and thoughtful conversation." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚕️</text></svg>" />
+</head>
+<body>
+  <div class="bg-noise"></div>
+  <div class="bg-decoration bg-orb bg-orb-1"></div>
+  <div class="bg-decoration bg-orb bg-orb-2"></div>
+
+  <div id="auth-gate" class="auth-gate" style="display:none">
+    <div class="auth-card">
+      <div class="auth-badge">Worldwide Access</div>
+      <h1 id="auth-title" class="auth-title">Welcome back</h1>
+      <p id="auth-subtitle" class="auth-subtitle">Sign in to access your saved MedBrief conversations from anywhere.</p>
+      <div class="auth-tabs">
+        <button id="auth-tab-login" class="auth-tab active" type="button">Sign In</button>
+        <button id="auth-tab-signup" class="auth-tab" type="button">Create Account</button>
+      </div>
+      <form id="auth-form" class="auth-form">
+        <label class="auth-label" for="auth-email">Email</label>
+        <input id="auth-email" class="auth-input" type="email" autocomplete="email" placeholder="you@example.com" required />
+        <label class="auth-label" for="auth-password">Password</label>
+        <input id="auth-password" class="auth-input" type="password" autocomplete="current-password" placeholder="At least 8 characters" required />
+        <p id="auth-error" class="auth-error" style="display:none"></p>
+        <button id="auth-submit" class="auth-submit" type="submit">Sign In</button>
+      </form>
+      <button id="auth-switch" class="auth-switch" type="button">Need an account? Create one</button>
+    </div>
+  </div>
+
+  <div id="app">
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <div class="logo-icon">
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+              <rect x="2" y="2" width="24" height="24" rx="7" stroke="url(#logo-g)" stroke-width="1.5" fill="none"/>
+              <path d="M14 8V20M8 14H20" stroke="url(#logo-g)" stroke-width="2.5" stroke-linecap="round"/>
+              <circle cx="14" cy="14" r="3.5" stroke="url(#logo-g)" stroke-width="1" fill="none" opacity="0.35"/>
+              <defs>
+                <linearGradient id="logo-g" x1="0" y1="0" x2="28" y2="28">
+                  <stop offset="0%" stop-color="#7F83FF"/>
+                  <stop offset="100%" stop-color="#A78BFA"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <span class="logo-text">MedBrief AI</span>
+        </div>
+        <button id="new-chat-btn" class="new-chat-btn" title="New conversation">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 2V14M2 8H14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="sidebar-conversations" id="conversation-list"></div>
+
+      <div class="sidebar-footer">
+        <div class="session-pill" id="session-pill">Signed Out</div>
+        <button id="settings-btn" class="sidebar-footer-btn" title="Settings & Developer">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M8 1.5V3.5M8 12.5V14.5M1.5 8H3.5M12.5 8H14.5M3.05 3.05L4.46 4.46M11.54 11.54L12.95 12.95M12.95 3.05L11.54 4.46M4.46 11.54L3.05 12.95" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          <span>Settings & API</span>
+        </button>
+        <button id="theme-toggle" class="sidebar-footer-btn" title="Toggle theme">
+          <svg id="theme-icon-dark" width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M13.5 9.2A6 6 0 016.8 2.5a6.5 6.5 0 106.7 6.7z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <svg id="theme-icon-light" width="16" height="16" viewBox="0 0 16 16" fill="none" style="display:none">
+            <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M8 1.5V3M8 13V14.5M1.5 8H3M13 8H14.5M3.3 3.3L4.4 4.4M11.6 11.6L12.7 12.7M12.7 3.3L11.6 4.4M4.4 11.6L3.3 12.7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          <span>Theme</span>
+        </button>
+        <button id="crisis-btn" class="sidebar-footer-btn crisis-btn" title="Crisis resources">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 2L3 14H13L8 2Z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M8 6.5V9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="8" cy="11.5" r="0.6" fill="currentColor"/>
+          </svg>
+          <span>Crisis Support</span>
+        </button>
+      </div>
+    </aside>
+
+    <main id="main-content" class="main-content">
+      <header class="chat-header">
+        <div class="header-left">
+          <button id="sidebar-toggle" class="header-icon-btn" title="Toggle sidebar">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <path d="M3 4.5H15M3 9H15M3 13.5H15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="header-center">
+          <div class="header-brand">
+            <div class="header-status" id="header-status">
+              <div class="status-dot"></div>
+              <span>MedBrief AI is ready</span>
+            </div>
+          </div>
+        </div>
+        <div class="header-right">
+          <button id="mood-check-btn" class="header-icon-btn" title="Mood check-in">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <circle cx="9" cy="9" r="7.5" stroke="currentColor" stroke-width="1.4"/>
+              <circle cx="6.8" cy="7.8" r="0.9" fill="currentColor"/>
+              <circle cx="11.2" cy="7.8" r="0.9" fill="currentColor"/>
+              <path d="M6.5 11.2Q9 13.5 11.5 11.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <div id="welcome-screen" class="welcome-screen">
+        <div class="welcome-content">
+          <div class="welcome-logo-wrap">
+            <div class="welcome-pulse-ring"></div>
+            <div class="welcome-pulse-ring welcome-pulse-ring-2"></div>
+            <div class="welcome-logo-core">
+              <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                <rect x="4" y="4" width="40" height="40" rx="12" stroke="url(#wlg)" stroke-width="1.5" fill="none" opacity="0.25"/>
+                <path d="M24 14V34M16 24H32" stroke="url(#wlg)" stroke-width="2.5" stroke-linecap="round"/>
+                <circle cx="24" cy="24" r="5.5" stroke="url(#wlg)" stroke-width="1.2" fill="none" opacity="0.4"/>
+                <defs>
+                  <linearGradient id="wlg" x1="0" y1="0" x2="48" y2="48">
+                    <stop offset="0%" stop-color="#7F83FF"/>
+                    <stop offset="100%" stop-color="#A78BFA"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+          </div>
+          <div class="welcome-badge">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <circle cx="5" cy="5" r="3" fill="currentColor" opacity="0.7"/>
+            </svg>
+            Intelligent Medical Assistant
+          </div>
+          <h1 class="welcome-title">How can I help you today?</h1>
+          <p class="welcome-subtitle">MedBrief AI combines healthcare expertise with emotional intelligence to deliver thoughtful, measured guidance.</p>
+          <div class="welcome-prompts" id="welcome-prompts">
+            <button class="prompt-card" data-prompt="I've been feeling overwhelmed lately and I'm not sure why.">
+              <div class="prompt-icon-wrap"><span class="prompt-icon">💭</span></div>
+              <div class="prompt-text">
+                <span class="prompt-label">Feeling overwhelmed</span>
+                <span class="prompt-desc">Explore what's weighing on you</span>
+              </div>
+              <svg class="prompt-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <button class="prompt-card" data-prompt="What kind of projects are featured in this portfolio?">
+              <div class="prompt-icon-wrap"><span class="prompt-icon">🚀</span></div>
+              <div class="prompt-text">
+                <span class="prompt-label">Explore the portfolio</span>
+                <span class="prompt-desc">Learn about the work here</span>
+              </div>
+              <svg class="prompt-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <button class="prompt-card" data-prompt="Can you explain how burnout affects the nervous system?">
+              <div class="prompt-icon-wrap"><span class="prompt-icon">🧠</span></div>
+              <div class="prompt-text">
+                <span class="prompt-label">Health & Science</span>
+                <span class="prompt-desc">Understand how the mind works</span>
+              </div>
+              <svg class="prompt-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <button class="prompt-card" data-prompt="I need help organizing my thoughts for a big decision.">
+              <div class="prompt-icon-wrap"><span class="prompt-icon">📋</span></div>
+              <div class="prompt-text">
+                <span class="prompt-label">Organize my thoughts</span>
+                <span class="prompt-desc">Structure a complex choice</span>
+              </div>
+              <svg class="prompt-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="chat-messages" class="chat-messages" style="display:none">
+        <div class="messages-container" id="messages-container"></div>
+      </div>
+
+      <div id="mood-modal" class="modal-overlay" style="display:none">
+        <div class="modal-panel">
+          <button class="modal-close" id="mood-close">&times;</button>
+          <h3 class="modal-title">How are you feeling right now?</h3>
+          <p class="modal-desc">There's no right answer. Just check in with yourself.</p>
+          <div class="mood-options">
+            <button class="mood-option" data-mood="great" data-value="5">
+              <span class="mood-emoji">😊</span>
+              <span class="mood-label">Great</span>
+            </button>
+            <button class="mood-option" data-mood="okay" data-value="4">
+              <span class="mood-emoji">🙂</span>
+              <span class="mood-label">Okay</span>
+            </button>
+            <button class="mood-option" data-mood="meh" data-value="3">
+              <span class="mood-emoji">😐</span>
+              <span class="mood-label">Meh</span>
+            </button>
+            <button class="mood-option" data-mood="low" data-value="2">
+              <span class="mood-emoji">😔</span>
+              <span class="mood-label">Low</span>
+            </button>
+            <button class="mood-option" data-mood="struggling" data-value="1">
+              <span class="mood-emoji">😢</span>
+              <span class="mood-label">Struggling</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="crisis-modal" class="modal-overlay" style="display:none">
+        <div class="modal-panel">
+          <button class="crisis-close" id="crisis-close">&times;</button>
+          <div class="crisis-header-icon">🆘</div>
+          <h3 class="modal-title">You're not alone</h3>
+          <p class="modal-desc">If you're in crisis or need immediate support, please reach out to trained professionals who can help right now.</p>
+          <div class="crisis-resources">
+            <a href="tel:988" class="crisis-resource">
+              <div class="resource-icon">📞</div>
+              <div class="resource-info">
+                <strong>988 Suicide & Crisis Lifeline</strong>
+                <span>Call or text 988 — available 24/7</span>
+              </div>
+            </a>
+            <a href="sms:741741&body=HELLO" class="crisis-resource">
+              <div class="resource-icon">💬</div>
+              <div class="resource-info">
+                <strong>Crisis Text Line</strong>
+                <span>Text HOME to 741741</span>
+              </div>
+            </a>
+            <a href="https://findtreatment.gov" target="_blank" rel="noopener" class="crisis-resource">
+              <div class="resource-icon">🏥</div>
+              <div class="resource-info">
+                <strong>SAMHSA Treatment Locator</strong>
+                <span>Find local support services</span>
+              </div>
+            </a>
+            <a href="tel:911" class="crisis-resource emergency">
+              <div class="resource-icon">🚨</div>
+              <div class="resource-info">
+                <strong>Emergency Services</strong>
+                <span>Call 911 if in immediate danger</span>
+              </div>
+            </a>
+          </div>
+          <p class="crisis-footer-note">MedBrief AI is not a replacement for professional care. You deserve real support.</p>
+        </div>
+      </div>
+
+      <div id="settings-modal" class="modal-overlay" style="display:none">
+        <div class="settings-panel">
+          <div class="settings-header">
+            <h2 class="settings-title">Settings</h2>
+            <button class="modal-close" id="settings-close">&times;</button>
+          </div>
+          <div class="settings-body">
+            <div class="settings-section">
+              <div class="settings-section-header">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1L10 5H14L11 7.5L12 12L8 9.5L4 12L5 7.5L2 5H6L8 1Z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <h3>Runtime Status</h3>
+              </div>
+              <div class="settings-card">
+                <div class="runtime-grid">
+                  <div class="runtime-item">
+                    <span class="runtime-label">Model</span>
+                    <span class="runtime-value" id="runtime-model">—</span>
+                  </div>
+                  <div class="runtime-item">
+                    <span class="runtime-label">Endpoint</span>
+                    <span class="runtime-value runtime-mono" id="runtime-endpoint">—</span>
+                  </div>
+                  <div class="runtime-item">
+                    <span class="runtime-label">Streaming</span>
+                    <span class="runtime-value" id="runtime-stream">—</span>
+                  </div>
+                  <div class="runtime-item">
+                    <span class="runtime-label">Temperature</span>
+                    <span class="runtime-value" id="runtime-temp">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <div class="settings-section-header">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2.2a2.8 2.8 0 110 5.6a2.8 2.8 0 010-5.6ZM3 13.2c.8-2 2.7-3.2 5-3.2s4.2 1.2 5 3.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                <h3>Account</h3>
+              </div>
+              <div class="settings-card">
+                <div class="runtime-grid">
+                  <div class="runtime-item">
+                    <span class="runtime-label">Email</span>
+                    <span class="runtime-value" id="session-email">Signed out</span>
+                  </div>
+                  <div class="runtime-item">
+                    <span class="runtime-label">Session</span>
+                    <span class="runtime-value" id="session-mode">Account session</span>
+                  </div>
+                </div>
+                <div class="api-actions account-actions">
+                  <button class="btn-ghost" id="logout-btn" type="button" style="display:none">Sign Out</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-section" id="developer-section" style="display:none">
+              <div class="settings-section-header">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="8" rx="2" stroke="currentColor" stroke-width="1.3"/><path d="M5 4V3a3 3 0 016 0v1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="8.5" r="1.2" fill="currentColor"/></svg>
+                <h3>Developer Access</h3>
+              </div>
+              <div class="settings-card">
+                <p class="settings-card-desc">Generate an API key to use MedBrief AI's <code>/v1/chat/completions</code> endpoint in your own projects.</p>
+                <div class="api-key-display" id="api-key-display" style="display:none">
+                  <div class="api-key-row">
+                    <code class="api-key-value" id="api-key-value"></code>
+                    <button class="api-key-copy" id="api-key-copy" title="Copy key">
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="4.5" y="4.5" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M9.5 4.5V3a1.5 1.5 0 00-1.5-1.5H3A1.5 1.5 0 001.5 3v5A1.5 1.5 0 003 9.5h1.5" stroke="currentColor" stroke-width="1.2"/></svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="api-actions">
+                  <button class="btn-primary" id="generate-api-key">Generate API Key</button>
+                  <button class="btn-danger" id="revoke-api-key" style="display:none">Revoke Key</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <div class="settings-section-header">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 4h12M2 8h12M2 12h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                <h3>Preferences</h3>
+              </div>
+              <div class="settings-card">
+                <div class="pref-row">
+                  <div class="pref-info">
+                    <span class="pref-name">Max Tokens</span>
+                    <span class="pref-desc">Maximum response length</span>
+                  </div>
+                  <input type="number" class="pref-input" id="pref-max-tokens" value="150" min="50" max="2000" step="10" />
+                </div>
+                <div class="pref-divider"></div>
+                <div class="pref-row">
+                  <div class="pref-info">
+                    <span class="pref-name">Temperature</span>
+                    <span class="pref-desc">Creativity of responses (0.0–2.0)</span>
+                  </div>
+                  <input type="number" class="pref-input" id="pref-temperature" value="0.8" min="0" max="2" step="0.1" />
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <div class="settings-section-header">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1v2M8 13v2M1 8h2M13 8h2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="8" r="4" stroke="currentColor" stroke-width="1.3"/></svg>
+                <h3>Saved Memory</h3>
+              </div>
+              <div class="settings-card">
+                <div class="memory-stats" id="memory-stats">
+                  <div class="memory-stat">
+                    <span class="memory-stat-value" id="mem-conversations">0</span>
+                    <span class="memory-stat-label">Conversations</span>
+                  </div>
+                  <div class="memory-stat">
+                    <span class="memory-stat-value" id="mem-moods">0</span>
+                    <span class="memory-stat-label">Mood Entries</span>
+                  </div>
+                  <div class="memory-stat">
+                    <span class="memory-stat-value" id="mem-themes">0</span>
+                    <span class="memory-stat-label">Themes</span>
+                  </div>
+                </div>
+                <div class="memory-actions">
+                  <button class="btn-ghost btn-danger-ghost" id="clear-memory">Clear All Data</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="composer-area">
+        <div class="composer" id="composer">
+          <div class="composer-inner">
+            <textarea
+              id="message-input"
+              class="message-input"
+              placeholder="Message MedBrief AI…"
+              rows="1"
+              maxlength="4000"
+            ></textarea>
+            <button id="send-btn" class="send-btn" disabled title="Send message">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M2 8L14 2L8 14L7 9L2 8Z" fill="currentColor"/>
+              </svg>
+            </button>
+          </div>
+          <div class="composer-footer">
+            <span class="composer-note">MedBrief AI is not a doctor or therapist. For emergencies, call <a href="tel:988">988</a> or <a href="tel:911">911</a>.</span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="config.js?v=4"></script>
+  <script src="memory.js?v=4"></script>
+  <script src="engine.js?v=4"></script>
+  <script src="app.js?v=4"></script>
+</body>
+</html>

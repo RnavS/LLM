@@ -1,0 +1,9 @@
+.git
+.venv312
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+live_uvicorn_err.log
+live_uvicorn_out.log
+checkpoints

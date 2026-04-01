@@ -1,0 +1,7 @@
+The internet is a global network of interconnected computer systems that communicate using standardized protocols. Modern internet traffic depends heavily on TCP/IP, routing, domain name resolution, and layered services. The web is only one service running on top of the internet. Email, file transfer, streaming, and application APIs also rely on internet infrastructure.
+
+Machine learning is a branch of computer science focused on building systems that detect patterns from data. A model is trained by adjusting parameters to reduce error on a task. Training data, model size, objective design, and evaluation quality all affect results. A model can appear fluent while still being inaccurate, so testing for factuality and failure modes matters.
+
+Encryption protects information by transforming readable data into a form that requires a key to interpret. Symmetric encryption uses the same secret key for encryption and decryption, while asymmetric systems use public and private keys. Hashing is different from encryption because it is designed to be one-way under normal use.
+
+Electric circuits involve the flow of charge through conductive pathways. Voltage is the potential difference that drives current. Resistance limits current flow, and power describes the rate of energy transfer. In simple direct-current systems, Ohm's law relates voltage, current, and resistance.

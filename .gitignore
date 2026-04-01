@@ -5,8 +5,12 @@ __pycache__/
 *.pyd
 *.egg-info/
 .venv/
+.venv312/
 venv/
 llm-env/
+frontend/node_modules/
+frontend/dist/
+.env
 
 # Notebooks and checkpoints
 .ipynb_checkpoints/
@@ -14,8 +18,18 @@ llm-env/
 # Data, logs, outputs
 *.log
 output.txt
+chat_session*.json
 
 # Model weights / artifacts
 *.pth
 *.pt
 *.pkl
+data/tokenizer/
+data/index/*.pkl
+data/prepared_corpus.txt
+data/*.meta.json
+data/app/
+data/web_cache/
+checkpoints/*
+!checkpoints/.gitkeep
+!data/.gitkeep

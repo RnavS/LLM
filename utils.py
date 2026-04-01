@@ -1,79 +1,129 @@
-import re
-from collections import Counter
+from __future__ import annotations
 
-def load_data(file_path):
-    with open(file_path, 'r', encoding='utf-8') as f:
-        return f.read().strip()
+import json
+import math
+import random
+import sys
+import time
+from pathlib import Path
+from typing import Any, Dict, Iterable
 
-def clean_text(text):
-    text = text.lower()
-    text = text.replace('\n', ' <newline> ')
-    text = re.sub(r'\.', ' <period> <eos> ', text)
-    text = re.sub(r'\!', ' <exclamation> <eos> ', text)
-    text = re.sub(r'\?', ' <question> <eos> ', text)
-    text = re.sub(r',', ' <comma> ', text)
-    text = re.sub(r'["“”]', ' <quote> ', text)
-    text = re.sub(r'[-–—]', ' <dash> ', text)
-    return text
-
-def restore_text(tokens):
-    text = ' '.join(tokens)
-    text = re.sub(r'\s*<period>\s*', '.', text)
-    text = re.sub(r'\s*<comma>\s*', ',', text)
-    text = re.sub(r'\s*<question>\s*', '?', text)
-    text = re.sub(r'\s*<exclamation>\s*', '!', text)
-    text = re.sub(r'\s*<quote>\s*', '"', text)
-    text = re.sub(r'\s*<dash>\s*', '-', text)
-    text = re.sub(r'\s*<newline>\s*', '\n', text)
-    text = re.sub(r'\s*<eos>\s*', ' <eos> ', text)
-    sentences = []
-    
-    for segment in text.split('<eos>'):
-        segment = segment.strip()
-        if segment:
-            segment = segment[0].upper() + segment[1:] if len(segment) > 1 else segment.upper()
-            sentences.append(segment)
-    return ' '.join(sentences)
+try:
+    import torch
+except ImportError:  # pragma: no cover - allows non-training utilities to work before dependencies are installed
+    torch = None
 
 
-def advanced_clean_text(text):
-    text = text.replace('“', '"').replace('”', '"').replace('’', "'").replace('‘', "'")
-    text = text.replace("—", "-").replace("–", "-")
-    text = re.sub(r'[^\x00-\x7F]+', ' ', text)  # keep only ASCII
-    text = re.sub(r'https?://\S+|www\.\S+', '', text)
-    text = re.sub(r'\S+@\S+', '', text)
-    text = re.sub(r'\s*([.?!,;:])\s*', r'\1 ', text)
-    text = re.sub(r'\s+', ' ', text)
-    text = text.strip()
-    if text and text[-1] not in ".!?":
-        text += '.'
+def ensure_dir(path: str | Path) -> Path:
+    directory = Path(path)
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
 
-    return text
 
-def make_vocab(text):
-    words = text.split()
-    unique_words = sorted(set(words))
-    stringtoindex = {word: i for i, word in enumerate(unique_words)}
-    indextostring = {i: word for word, i in stringtoindex.items()}
-    return stringtoindex, indextostring
+def configure_console_output() -> None:
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        if stream is not None and hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
 
-def preview_vocab(token_map, count=10):
-    print("Previewing first", count, "tokens:")
-    for token, idx in list(token_map.items())[:count]:
-        print(f"'{token}': {idx}")
 
-def preprocess(text, mode="advanced"):
-    if mode == "basic":
-        return clean_text(text)
-    return advanced_clean_text(text)
+def load_text(path: str | Path) -> str:
+    return Path(path).read_text(encoding="utf-8")
 
-def count_char_freq(text):
-    words = text.split()
-    frequent = Counter(words)
-    return frequent.most_common(10)
 
-def encode(text, stringtoindex):
-    return [stringtoindex[word] for word in text.split() if word in stringtoindex]
+def save_text(path: str | Path, content: str) -> None:
+    Path(path).write_text(content, encoding="utf-8")
 
-def decode(indices, indextostring):
-    return ' '.join([indextostring[i] for i in indices])
+
+def save_json(path: str | Path, data: Dict[str, Any]) -> None:
+    Path(path).write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def load_json(path: str | Path) -> Dict[str, Any]:
+    return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+def append_jsonl(path: str | Path, record: Dict[str, Any]) -> None:
+    with Path(path).open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record) + "\n")
+
+
+def set_seed(seed: int) -> None:
+    if torch is None:
+        raise ImportError("torch is required to set the random seed for training.")
+    random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
+def get_device(requested: str = "auto") -> torch.device:
+    if torch is None:
+        raise ImportError("torch is required for training or inference.")
+    if requested != "auto":
+        return torch.device(requested)
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+def count_parameters(model: torch.nn.Module) -> int:
+    if torch is None:
+        raise ImportError("torch is required to inspect model parameters.")
+    return sum(parameter.numel() for parameter in model.parameters() if parameter.requires_grad)
+
+
+def format_seconds(total_seconds: float) -> str:
+    total_seconds = max(total_seconds, 0.0)
+    minutes, seconds = divmod(int(total_seconds), 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes}m {seconds}s"
+    if minutes:
+        return f"{minutes}m {seconds}s"
+    return f"{seconds}s"
+
+
+def lr_with_warmup_and_cosine_decay(
+    step: int,
+    max_steps: int,
+    max_lr: float,
+    min_lr: float,
+    warmup_steps: int,
+) -> float:
+    if step < warmup_steps:
+        return max_lr * float(step + 1) / float(max(1, warmup_steps))
+    if step >= max_steps:
+        return min_lr
+    decay_ratio = (step - warmup_steps) / float(max(1, max_steps - warmup_steps))
+    decay_ratio = min(max(decay_ratio, 0.0), 1.0)
+    cosine = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))
+    return min_lr + cosine * (max_lr - min_lr)
+
+
+def resolve_checkpoint_path(path: str | Path) -> Path:
+    candidate = Path(path)
+    if candidate.is_dir():
+        latest = candidate / "latest.pt"
+        if latest.exists():
+            return latest
+        raise FileNotFoundError(f"No latest.pt checkpoint found in {candidate}")
+    if not candidate.exists():
+        raise FileNotFoundError(f"Checkpoint not found: {candidate}")
+    return candidate
+
+
+def load_checkpoint(path: str | Path, device: torch.device) -> tuple[Dict[str, Any], Path]:
+    if torch is None:
+        raise ImportError("torch is required to load checkpoints.")
+    resolved = resolve_checkpoint_path(path)
+    checkpoint = torch.load(resolved, map_location=device)
+    return checkpoint, resolved
+
+
+def save_checkpoint(path: str | Path, payload: Dict[str, Any]) -> None:
+    if torch is None:
+        raise ImportError("torch is required to save checkpoints.")
+    torch.save(payload, Path(path))
+
+
+def elapsed_since(start_time: float) -> str:
+    return format_seconds(time.time() - start_time)
