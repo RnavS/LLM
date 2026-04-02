@@ -306,9 +306,16 @@ document.addEventListener('DOMContentLoaded', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
       });
-      const payload = await response.json().catch(() => ({}));
+      const rawText = await response.text();
+      let payload = {};
+      try {
+        payload = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        payload = {};
+      }
       if (!response.ok) {
-        throw new Error(payload.detail || 'Authentication failed.');
+        const detail = payload.detail || payload.message || rawText || 'Authentication failed.';
+        throw new Error(String(detail).trim());
       }
       authSession = payload;
       renderSessionUi();

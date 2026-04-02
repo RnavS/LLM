@@ -96,6 +96,16 @@ def _require_supabase_auth_client(app: FastAPI) -> SupabaseClient:
     return client
 
 
+def _ensure_owner_record_or_raise(store: Any, user_id: str, email: str) -> None:
+    try:
+        store.ensure_owner_record(user_id, email=email)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication worked, but MedBrief storage is not ready. Run supabase/schema.sql in your Supabase project and redeploy.",
+        ) from exc
+
+
 def _auth_session_payload(request: Request) -> Dict[str, Any]:
     session = get_request_session(request)
     if not session:
@@ -454,7 +464,7 @@ async def auth_signup(request: Request, payload: AuthSignupRequest) -> Response:
     if not user_id:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Authentication provider did not return a user id.")
     _, _, store, _ = _load_state(request.app)
-    store.ensure_owner_record(user_id, email=email)
+    _ensure_owner_record_or_raise(store, user_id, email)
     response = JSONResponse(
         {
             "authenticated": True,
@@ -483,7 +493,7 @@ async def auth_login(request: Request, payload: AuthLoginRequest) -> Response:
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sign-in failed.")
     _, _, store, _ = _load_state(request.app)
-    store.ensure_owner_record(user_id, email=email)
+    _ensure_owner_record_or_raise(store, user_id, email)
     response = JSONResponse(
         {
             "authenticated": True,
