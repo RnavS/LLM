@@ -72,6 +72,28 @@ def _default_checkpoint(root_dir: Path) -> str:
     return "checkpoints/advanced_local"
 
 
+def _is_serverless_runtime() -> bool:
+    return bool(
+        os.environ.get("VERCEL")
+        or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
+        or os.environ.get("AWS_EXECUTION_ENV")
+    )
+
+
+def _resolve_writable_path(
+    root_dir: Path,
+    raw_value: str,
+    default_value: str,
+    runtime_root: Path,
+) -> Path:
+    candidate = Path(raw_value or default_value)
+    if candidate.is_absolute():
+        return candidate.resolve()
+    if _is_serverless_runtime():
+        return (runtime_root / candidate).resolve()
+    return (root_dir / candidate).resolve()
+
+
 def _is_loopback_host(value: str) -> bool:
     lowered = value.strip().lower()
     return lowered in {"127.0.0.1", "localhost", "::1"}
@@ -158,6 +180,13 @@ class ServerSettings:
 def load_server_settings(root_dir: str | Path | None = None) -> ServerSettings:
     resolved_root = Path(root_dir or Path(__file__).resolve().parent.parent).resolve()
     env_file_values = _parse_dotenv(resolved_root / ".env")
+    runtime_root = Path(
+        _get_env(
+            "LLM_RUNTIME_DIR",
+            "/tmp/medbrief-runtime" if _is_serverless_runtime() else str(resolved_root),
+            env_file_values,
+        )
+    ).resolve()
     host = _get_env("LLM_HOST", "127.0.0.1", env_file_values)
     cors_allow_origins = _parse_origins(
         _get_env(
@@ -215,8 +244,18 @@ def load_server_settings(root_dir: str | Path | None = None) -> ServerSettings:
         generated_key_rate_limit_minute=_parse_int(_get_env("LLM_GENERATED_KEY_RATE_LIMIT_MINUTE", "40", env_file_values), 40),
         generated_key_rate_limit_hour=_parse_int(_get_env("LLM_GENERATED_KEY_RATE_LIMIT_HOUR", "240", env_file_values), 240),
         generated_key_rate_limit_day=_parse_int(_get_env("LLM_GENERATED_KEY_RATE_LIMIT_DAY", "4000", env_file_values), 4000),
-        web_cache_dir=(resolved_root / _get_env("LLM_WEB_CACHE_DIR", "data/web_cache", env_file_values)).resolve(),
-        database_path=(resolved_root / _get_env("LLM_DATABASE_PATH", "data/app/medbrief.sqlite3", env_file_values)).resolve(),
+        web_cache_dir=_resolve_writable_path(
+            resolved_root,
+            _get_env("LLM_WEB_CACHE_DIR", "data/web_cache", env_file_values),
+            "data/web_cache",
+            runtime_root,
+        ),
+        database_path=_resolve_writable_path(
+            resolved_root,
+            _get_env("LLM_DATABASE_PATH", "data/app/medbrief.sqlite3", env_file_values),
+            "data/app/medbrief.sqlite3",
+            runtime_root,
+        ),
         frontend_dist=(resolved_root / _get_env("LLM_FRONTEND_DIST", "frontend_static", env_file_values)).resolve(),
         cors_allow_origins=cors_allow_origins,
         supabase_url=_get_env("SUPABASE_URL", "", env_file_values),
