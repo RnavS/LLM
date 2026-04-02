@@ -369,6 +369,11 @@ def _frontend_file_response(path, cache_control: str) -> FileResponse:
     return response
 
 
+def _allow_local_dev_session_fallback(request: Request) -> bool:
+    hostname = str(request.url.hostname or "").strip().lower()
+    return hostname in {"127.0.0.1", "localhost", "::1"}
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = load_server_settings()
@@ -404,7 +409,7 @@ app.add_middleware(
 @app.middleware("http")
 async def medbrief_session_middleware(request: Request, call_next):
     session, should_clear_cookie = load_request_session(request)
-    if session is None and not request.app.state.settings.supabase_configured:
+    if session is None and not request.app.state.settings.supabase_configured and _allow_local_dev_session_fallback(request):
         session = {
             "user_id": "local-dev-user",
             "email": "local@medbrief.dev",
