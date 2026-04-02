@@ -1517,6 +1517,26 @@ code {
   color: var(--accent-primary);
 }
 
+.api-example-block {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.api-example-code {
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .api-actions {
   display: flex;
   gap: 10px;

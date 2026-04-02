@@ -16,7 +16,7 @@
   <div class="bg-decoration bg-orb bg-orb-1"></div>
   <div class="bg-decoration bg-orb bg-orb-2"></div>
 
-  <div id="auth-gate" class="auth-gate" style="display:none">
+  <div id="auth-gate" class="auth-gate">
     <div class="auth-card">
       <div class="auth-badge">Worldwide Access</div>
       <h1 id="auth-title" class="auth-title">Welcome back</h1>
@@ -325,6 +325,7 @@
               </div>
               <div class="settings-card">
                 <p class="settings-card-desc">Generate an API key to use MedBrief AI's <code>/v1/chat/completions</code> endpoint in your own projects.</p>
+                <p class="settings-card-desc" id="api-key-quota">Developer keys use conservative safety limits while you are on a zero-budget launch.</p>
                 <div class="api-key-display" id="api-key-display" style="display:none">
                   <div class="api-key-row">
                     <code class="api-key-value" id="api-key-value"></code>
@@ -332,10 +333,18 @@
                       <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="4.5" y="4.5" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M9.5 4.5V3a1.5 1.5 0 00-1.5-1.5H3A1.5 1.5 0 001.5 3v5A1.5 1.5 0 003 9.5h1.5" stroke="currentColor" stroke-width="1.2"/></svg>
                     </button>
                   </div>
+                  <p class="settings-card-desc" id="api-key-meta"></p>
                 </div>
                 <div class="api-actions">
                   <button class="btn-primary" id="generate-api-key">Generate API Key</button>
                   <button class="btn-danger" id="revoke-api-key" style="display:none">Revoke Key</button>
+                </div>
+                <div class="api-example-block">
+                  <p class="settings-card-desc">Use the returned key from your own backend and pass a stable <code>metadata.conversation_id</code> to keep chat memory stored.</p>
+                  <pre class="api-example-code"><code id="api-example-code">curl https://your-domain/v1/chat/completions \
+  -H "Authorization: Bearer YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{\"model\":\"medbrief-ai\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}],\"metadata\":{\"persist\":true,\"conversation_id\":\"my-app-user-1\"}}"</code></pre>
                 </div>
               </div>
             </div>

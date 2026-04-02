@@ -41,6 +41,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const apiKeyDisplay = $('api-key-display');
   const apiKeyValue = $('api-key-value');
   const apiKeyCopy = $('api-key-copy');
+  const apiKeyQuota = $('api-key-quota');
+  const apiKeyMeta = $('api-key-meta');
+  const apiExampleCode = $('api-example-code');
   const clearMemoryBtn = $('clear-memory');
   const prefMaxTokens = $('pref-max-tokens');
   const prefTemperature = $('pref-temperature');
@@ -773,6 +776,8 @@ document.addEventListener('DOMContentLoaded', () => {
     prefTemperature.value = RECALL_CONFIG.TEMPERATURE;
     sessionEmail.textContent = authSession?.user?.email || 'Signed out';
     sessionMode.textContent = authSession?.mode === 'local-dev' ? 'Local dev session' : 'Account session';
+    renderApiKeySafety(runtimeConfig?.generated_key_rate_limits || null);
+    renderApiExample();
   }
 
   async function loadRuntimeConfig() {
@@ -796,9 +801,13 @@ document.addEventListener('DOMContentLoaded', () => {
       if (developerSection) {
         developerSection.style.display = runtimeConfig.api_key_self_serve_enabled ? '' : 'none';
       }
+      renderApiKeySafety(runtimeConfig?.generated_key_rate_limits || null);
+      renderApiExample();
     } catch {
       RECALL_CONFIG.API_ENDPOINT = apiUrl('/api/chat/completions');
       if (developerSection) developerSection.style.display = 'none';
+      renderApiKeySafety(null);
+      renderApiExample();
     }
   }
 
@@ -834,6 +843,7 @@ document.addEventListener('DOMContentLoaded', () => {
         apiKeyValue.textContent = activeKey.key_prefix;
         apiKeyDisplay.style.display = 'block';
       }
+      renderApiKeyMeta(activeKey);
       revokeApiKeyBtn.style.display = 'inline-flex';
       generateApiKeyBtn.textContent = 'Regenerate API Key';
     } catch {}
@@ -845,6 +855,7 @@ document.addEventListener('DOMContentLoaded', () => {
     RECALL_CONFIG.API_KEY = 'local-model';
     apiKeyValue.textContent = '';
     apiKeyDisplay.style.display = 'none';
+    apiKeyMeta.textContent = '';
     revokeApiKeyBtn.style.display = 'none';
     if (generateApiKeyBtn) generateApiKeyBtn.textContent = 'Generate API Key';
   }
@@ -865,6 +876,7 @@ document.addEventListener('DOMContentLoaded', () => {
       RECALL_CONFIG.API_KEY = key;
       apiKeyValue.textContent = key;
       apiKeyDisplay.style.display = 'block';
+      renderApiKeyMeta(payload.record || null);
       revokeApiKeyBtn.style.display = 'inline-flex';
       generateApiKeyBtn.textContent = 'Regenerate API Key';
     } catch {
@@ -936,6 +948,32 @@ document.addEventListener('DOMContentLoaded', () => {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  function renderApiKeySafety(rateLimits) {
+    if (!apiKeyQuota) return;
+    if (!rateLimits) {
+      apiKeyQuota.textContent = 'Developer keys are currently unavailable on this deployment.';
+      return;
+    }
+    apiKeyQuota.textContent = `One active key at a time. Current safety limits: ${rateLimits.minute}/min, ${rateLimits.hour}/hour, ${rateLimits.day}/day, max ${runtimeConfig?.max_completion_tokens || 400} completion tokens per request.`;
+  }
+
+  function renderApiKeyMeta(record) {
+    if (!apiKeyMeta) return;
+    if (!record) {
+      apiKeyMeta.textContent = '';
+      return;
+    }
+    const usageCount = Number(record.usage_count || 0);
+    const lastUsed = record.last_used_at ? new Date(record.last_used_at).toLocaleString() : 'Never used';
+    apiKeyMeta.textContent = `${record.label || 'Developer key'} · ${usageCount} requests · Last used: ${lastUsed}`;
+  }
+
+  function renderApiExample() {
+    if (!apiExampleCode) return;
+    const origin = window.location.origin;
+    apiExampleCode.textContent = `curl ${origin}/v1/chat/completions \\\n  -H "Authorization: Bearer YOUR_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d "{\\"model\\":\\"${runtimeConfig?.active_model || 'medbrief-ai'}\\",\\"messages\\":[{\\"role\\":\\"user\\",\\"content\\":\\"Hello\\"}],\\"metadata\\":{\\"persist\\":true,\\"conversation_id\\":\\"my-app-user-1\\"}}"`;
   }
 
   init();

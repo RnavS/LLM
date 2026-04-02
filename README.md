@@ -144,10 +144,27 @@ For a zero-budget public deployment:
 6. Set `LLM_PROVIDER_BASE_URL`, `LLM_PROVIDER_API_KEY`, and `LLM_PROVIDER_MODEL` for your hosted OpenAI-compatible provider.
 7. Set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and a strong `LLM_SESSION_SECRET`.
 8. Set `LLM_ALLOW_ORIGINS` to your deployed HTTPS domain.
-9. Deploy the repo on a host that can run FastAPI, such as Vercel or a Docker-compatible host.
-10. After the site is live, go back through the Supabase production checklist: stronger auth protections, SMTP if you keep email flows, and auth rate-limit review.
+9. Keep `LLM_API_KEY` blank in production unless you intentionally want one manually managed server key. Generated keys tied to signed-in accounts are the safer path.
+10. Keep `LLM_API_KEY_SELF_SERVE_ENABLED=true` if you want to use MedBrief from your own app through generated API keys.
+11. Start with the conservative quota defaults in `.env.example` so a brand-new public launch cannot burn through usage unexpectedly.
+12. Deploy the repo on a host that can run FastAPI, such as Vercel or a Docker-compatible host.
+13. After the site is live, go back through the Supabase production checklist: stronger auth protections, SMTP if you keep email flows, and auth rate-limit review.
 
 The website stays same-origin, the backend keeps the provider key on the server, and end users never talk directly to Supabase or the model provider from the browser.
+
+## Public API
+
+MedBrief can now issue one active developer key per signed-in account. Generating a new key automatically rotates the old one.
+
+- `GET /v1/models`
+- `GET /v1/conversations`
+- `POST /v1/conversations`
+- `GET /v1/conversations/{conversation_id}`
+- `DELETE /v1/conversations/{conversation_id}`
+- `GET /v1/profile/memory`
+- `POST /v1/chat/completions`
+
+To store conversation history from your own app, send a stable `metadata.conversation_id` and set `metadata.persist=true` on `/v1/chat/completions`. The response includes `X-MedBrief-Conversation-Id` and non-streaming responses also include a `medbrief` object with the stored conversation id.
 
 For Hugging Face Spaces specifically:
 

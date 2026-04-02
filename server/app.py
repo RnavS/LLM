@@ -165,6 +165,117 @@ def _persist_stateless_personalization(
     store.save_memory_items(owner_id, personalization.get("memory_items", []))
 
 
+def _metadata_flag(metadata: Dict[str, Any], *keys: str) -> bool:
+    for key in keys:
+        value = metadata.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "yes", "on"}:
+                return True
+            if normalized in {"0", "false", "no", "off"}:
+                return False
+    return False
+
+
+def _normalize_completion_messages(messages: list[Dict[str, Any]], assistant_reply: str) -> list[Dict[str, Any]]:
+    normalized: list[Dict[str, Any]] = []
+    for item in messages:
+        role = str(item.get("role", "")).strip().lower()
+        content = str(item.get("content", "")).strip()
+        if role not in {"system", "user", "assistant"} or not content:
+            continue
+        normalized.append(
+            {
+                "role": role,
+                "content": content,
+                "metadata": item.get("metadata") if isinstance(item.get("metadata"), dict) else {},
+            }
+        )
+    reply = str(assistant_reply or "").strip()
+    if reply:
+        normalized.append({"role": "assistant", "content": reply, "metadata": {}})
+    return normalized
+
+
+def _chat_completion_persistence_options(payload: ChatCompletionRequest) -> Dict[str, Any]:
+    metadata = payload.metadata if isinstance(payload.metadata, dict) else {}
+    conversation_id = str(metadata.get("conversation_id", "")).strip()
+    title = str(metadata.get("conversation_title") or metadata.get("title") or "").strip()
+    persist = _metadata_flag(metadata, "persist", "persist_conversation", "store", "store_conversation") or bool(conversation_id)
+    return {
+        "persist": persist,
+        "conversation_id": conversation_id,
+        "title": title,
+    }
+
+
+def _persist_completion_conversation(
+    service: LocalAssistantService,
+    store: Any,
+    owner_id: str,
+    messages: list[Dict[str, Any]],
+    generation_settings: Dict[str, Any],
+    result: Dict[str, Any],
+    persistence: Dict[str, Any],
+) -> Dict[str, Any] | None:
+    if not persistence.get("persist"):
+        return None
+
+    conversation_id = str(persistence.get("conversation_id", "")).strip()
+    conversation_title = str(persistence.get("title", "")).strip()
+    last_user_text = next(
+        (
+            str(message.get("content", "")).strip()
+            for message in reversed(messages)
+            if str(message.get("role", "")).strip().lower() == "user" and str(message.get("content", "")).strip()
+        ),
+        "",
+    )
+
+    if conversation_id:
+        try:
+            conversation = store.get_conversation(owner_id, conversation_id)
+        except KeyError:
+            conversation = store.create_conversation(
+                owner_id,
+                title=conversation_title or (last_user_text[:60] or "API conversation"),
+                system_preset=str(generation_settings.get("system_preset") or "medbrief-medical"),
+                system_prompt=str(generation_settings.get("system_prompt") or ""),
+                settings=generation_settings,
+            )
+            conversation_id = str(conversation["id"])
+    else:
+        conversation = store.create_conversation(
+            owner_id,
+            title=conversation_title or (last_user_text[:60] or "API conversation"),
+            system_preset=str(generation_settings.get("system_preset") or "medbrief-medical"),
+            system_prompt=str(generation_settings.get("system_prompt") or ""),
+            settings=generation_settings,
+        )
+        conversation_id = str(conversation["id"])
+
+    if conversation_title:
+        store.update_conversation(owner_id, conversation_id, title=conversation_title, settings=generation_settings)
+    else:
+        existing_title = str(conversation.get("title", "")).strip()
+        if existing_title in {"", "New chat", "New conversation", "API conversation"} and last_user_text:
+            store.update_conversation(owner_id, conversation_id, title=last_user_text[:60], settings=generation_settings)
+        else:
+            store.update_conversation(owner_id, conversation_id, settings=generation_settings)
+
+    stored_conversation = store.replace_conversation_messages(
+        owner_id,
+        conversation_id,
+        _normalize_completion_messages(messages, str(result.get("reply", ""))),
+    )
+    personalization = service.build_personalization_state(stored_conversation, last_user_text, generation_settings)
+    store.save_memory_items(owner_id, personalization.get("memory_items", []))
+    store.upsert_conversation_summary(owner_id, conversation_id, personalization.get("conversation_summary", {}))
+    return store.get_conversation(owner_id, conversation_id)
+
+
 def _phase_sequence(content: str, settings_payload: Dict[str, Any]) -> list[Dict[str, str]]:
     mode = classify_query_mode(
         content,
@@ -701,6 +812,69 @@ async def list_models(request: Request, api_key: Dict[str, str] = Depends(requir
     return payload
 
 
+@app.get("/v1/conversations")
+async def list_api_conversations(request: Request, api_key: Dict[str, str] = Depends(require_api_key)) -> Dict[str, Any]:
+    _, _, store, _ = _load_state(request.app)
+    owner_id = str(api_key.get("owner_id", "")).strip()
+    return {"data": store.list_conversations(owner_id)}
+
+
+@app.post("/v1/conversations")
+async def create_api_conversation(
+    request: Request,
+    payload: ConversationCreateRequest,
+    api_key: Dict[str, str] = Depends(require_api_key),
+) -> Dict[str, Any]:
+    _, service, store, _ = _load_state(request.app)
+    owner_id = str(api_key.get("owner_id", "")).strip()
+    profile = store.get_profile(owner_id)["profile"]
+    defaults = service.default_conversation_payload(title=payload.title or "New conversation")
+    settings_payload = defaults["settings"]
+    for key, value in profile.items():
+        settings_payload.setdefault(key, value)
+    settings_payload.update(_conversation_settings_payload(payload.settings))
+    return store.create_conversation(
+        owner_id,
+        title=payload.title or defaults["title"] or "New conversation",
+        system_preset=payload.system_preset or settings_payload.get("system_preset") or defaults["system_preset"],
+        system_prompt=payload.system_prompt or settings_payload.get("system_prompt") or defaults["system_prompt"],
+        settings=settings_payload,
+    )
+
+
+@app.get("/v1/conversations/{conversation_id}")
+async def get_api_conversation(
+    request: Request,
+    conversation_id: str,
+    api_key: Dict[str, str] = Depends(require_api_key),
+) -> Dict[str, Any]:
+    _, _, store, _ = _load_state(request.app)
+    try:
+        return store.get_conversation(str(api_key.get("owner_id", "")).strip(), conversation_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found.") from exc
+
+
+@app.delete("/v1/conversations/{conversation_id}")
+async def delete_api_conversation(
+    request: Request,
+    conversation_id: str,
+    api_key: Dict[str, str] = Depends(require_api_key),
+) -> Dict[str, str]:
+    _, _, store, _ = _load_state(request.app)
+    try:
+        store.delete_conversation(str(api_key.get("owner_id", "")).strip(), conversation_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found.") from exc
+    return {"status": "deleted"}
+
+
+@app.get("/v1/profile/memory")
+async def list_api_memory(request: Request, api_key: Dict[str, str] = Depends(require_api_key)) -> Dict[str, Any]:
+    _, _, store, _ = _load_state(request.app)
+    return {"data": store.list_memory_items(str(api_key.get("owner_id", "")).strip())}
+
+
 @app.post("/api/chat/completions", dependencies=[Depends(require_app_session)])
 async def app_chat_completions(request: Request, payload: ChatCompletionRequest) -> Response:
     settings, service, store, _ = _load_state(request.app)
@@ -714,6 +888,7 @@ async def app_chat_completions(request: Request, payload: ChatCompletionRequest)
         payload.to_generation_settings().to_runtime_kwargs(),
     )
     messages = [message.model_dump() for message in payload.messages]
+    persistence = _chat_completion_persistence_options(payload)
 
     try:
         result = await asyncio.wait_for(
@@ -730,24 +905,50 @@ async def app_chat_completions(request: Request, payload: ChatCompletionRequest)
             result = await asyncio.to_thread(service.generate_last_resort_fallback_for_messages, messages, generation_settings)
 
     latency_ms = (time.perf_counter() - started_at) * 1000.0
-    _persist_stateless_personalization(service, store, owner_id, messages, generation_settings, result)
+    stored_conversation = _persist_completion_conversation(
+        service,
+        store,
+        owner_id,
+        messages,
+        generation_settings,
+        result,
+        persistence,
+    )
+    if stored_conversation is None:
+        _persist_stateless_personalization(service, store, owner_id, messages, generation_settings, result)
     store.log_request(
         owner_id=owner_id,
         route="/api/chat/completions",
         status_code=200,
         latency_ms=latency_ms,
-        metadata={"stream": payload.stream, "model_id": result.get("model_id", service.model_id)},
+        metadata={
+            "stream": payload.stream,
+            "model_id": result.get("model_id", service.model_id),
+            "conversation_id": (stored_conversation or {}).get("id", ""),
+        },
     )
 
     if not payload.stream:
-        return JSONResponse(service.build_openai_response(result, completion_id=completion_id, created=created))
+        response_payload = service.build_openai_response(result, completion_id=completion_id, created=created)
+        if stored_conversation is not None:
+            response_payload["medbrief"] = {
+                "conversation_id": stored_conversation["id"],
+                "stored": True,
+            }
+        response = JSONResponse(response_payload)
+        if stored_conversation is not None:
+            response.headers["X-MedBrief-Conversation-Id"] = str(stored_conversation["id"])
+        return response
 
     async def event_stream() -> AsyncIterator[str]:
         for chunk in service.openai_stream_chunks(result, completion_id=completion_id, created=created):
             yield _json_sse(chunk)
         yield "data: [DONE]\n\n"
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    response = StreamingResponse(event_stream(), media_type="text/event-stream")
+    if stored_conversation is not None:
+        response.headers["X-MedBrief-Conversation-Id"] = str(stored_conversation["id"])
+    return response
 
 
 @app.post("/v1/chat/completions")
@@ -767,6 +968,7 @@ async def chat_completions(
         payload.to_generation_settings().to_runtime_kwargs(),
     )
     messages = [message.model_dump() for message in payload.messages]
+    persistence = _chat_completion_persistence_options(payload)
     try:
         result = await asyncio.wait_for(
             asyncio.to_thread(service.generate_from_messages, messages, generation_settings),
@@ -782,25 +984,51 @@ async def chat_completions(
             result = await asyncio.to_thread(service.generate_last_resort_fallback_for_messages, messages, generation_settings)
 
     latency_ms = (time.perf_counter() - started_at) * 1000.0
-    _persist_stateless_personalization(service, store, owner_id, messages, generation_settings, result)
+    stored_conversation = _persist_completion_conversation(
+        service,
+        store,
+        owner_id,
+        messages,
+        generation_settings,
+        result,
+        persistence,
+    )
+    if stored_conversation is None:
+        _persist_stateless_personalization(service, store, owner_id, messages, generation_settings, result)
     store.log_request(
         owner_id=owner_id,
         route="/v1/chat/completions",
         status_code=200,
         latency_ms=latency_ms,
         api_key_id=api_key.get("id"),
-        metadata={"stream": payload.stream, "model_id": result.get("model_id", service.model_id)},
+        metadata={
+            "stream": payload.stream,
+            "model_id": result.get("model_id", service.model_id),
+            "conversation_id": (stored_conversation or {}).get("id", ""),
+        },
     )
 
     if not payload.stream:
-        return JSONResponse(service.build_openai_response(result, completion_id=completion_id, created=created))
+        response_payload = service.build_openai_response(result, completion_id=completion_id, created=created)
+        if stored_conversation is not None:
+            response_payload["medbrief"] = {
+                "conversation_id": stored_conversation["id"],
+                "stored": True,
+            }
+        response = JSONResponse(response_payload)
+        if stored_conversation is not None:
+            response.headers["X-MedBrief-Conversation-Id"] = str(stored_conversation["id"])
+        return response
 
     async def event_stream() -> AsyncIterator[str]:
         for chunk in service.openai_stream_chunks(result, completion_id=completion_id, created=created):
             yield _json_sse(chunk)
         yield "data: [DONE]\n\n"
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    response = StreamingResponse(event_stream(), media_type="text/event-stream")
+    if stored_conversation is not None:
+        response.headers["X-MedBrief-Conversation-Id"] = str(stored_conversation["id"])
+    return response
 
 
 @app.get("/{full_path:path}", include_in_schema=False)

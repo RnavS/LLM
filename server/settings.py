@@ -152,6 +152,7 @@ class ServerSettings:
     generated_key_rate_limit_minute: int
     generated_key_rate_limit_hour: int
     generated_key_rate_limit_day: int
+    max_completion_tokens: int
     web_cache_dir: Path
     database_path: Path
     frontend_dist: Path
@@ -200,7 +201,7 @@ def load_server_settings(root_dir: str | Path | None = None) -> ServerSettings:
         product_name=_get_env("LLM_PRODUCT_NAME", "MedBrief AI", env_file_values),
         host=host,
         port=_parse_int(_get_env("LLM_PORT", "8000", env_file_values), 8000),
-        api_key=_get_env("LLM_API_KEY", "local-dev-key", env_file_values),
+        api_key=_get_env("LLM_API_KEY", "", env_file_values),
         checkpoint=_get_env("LLM_CHECKPOINT", _default_checkpoint(resolved_root), env_file_values),
         tokenizer_model=_get_env("LLM_TOKENIZER_MODEL", "", env_file_values),
         device=_get_env("LLM_DEVICE", "auto", env_file_values),
@@ -240,10 +241,11 @@ def load_server_settings(root_dir: str | Path | None = None) -> ServerSettings:
         ),
         message_rate_limit=_parse_int(_get_env("LLM_MESSAGE_RATE_LIMIT", "20", env_file_values), 20),
         message_rate_window_seconds=_parse_int(_get_env("LLM_MESSAGE_RATE_WINDOW_SECONDS", "60", env_file_values), 60),
-        api_key_self_serve_enabled=_parse_bool(_get_env("LLM_API_KEY_SELF_SERVE_ENABLED", "false", env_file_values)),
-        generated_key_rate_limit_minute=_parse_int(_get_env("LLM_GENERATED_KEY_RATE_LIMIT_MINUTE", "40", env_file_values), 40),
-        generated_key_rate_limit_hour=_parse_int(_get_env("LLM_GENERATED_KEY_RATE_LIMIT_HOUR", "240", env_file_values), 240),
-        generated_key_rate_limit_day=_parse_int(_get_env("LLM_GENERATED_KEY_RATE_LIMIT_DAY", "4000", env_file_values), 4000),
+        api_key_self_serve_enabled=_parse_bool(_get_env("LLM_API_KEY_SELF_SERVE_ENABLED", "true", env_file_values)),
+        generated_key_rate_limit_minute=_parse_int(_get_env("LLM_GENERATED_KEY_RATE_LIMIT_MINUTE", "6", env_file_values), 6),
+        generated_key_rate_limit_hour=_parse_int(_get_env("LLM_GENERATED_KEY_RATE_LIMIT_HOUR", "60", env_file_values), 60),
+        generated_key_rate_limit_day=_parse_int(_get_env("LLM_GENERATED_KEY_RATE_LIMIT_DAY", "250", env_file_values), 250),
+        max_completion_tokens=_parse_int(_get_env("LLM_MAX_COMPLETION_TOKENS", "400", env_file_values), 400),
         web_cache_dir=_resolve_writable_path(
             resolved_root,
             _get_env("LLM_WEB_CACHE_DIR", "data/web_cache", env_file_values),

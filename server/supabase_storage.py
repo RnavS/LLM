@@ -228,6 +228,50 @@ class SupabaseConversationStore:
             "created_at": now,
         }
 
+    def replace_conversation_messages(
+        self,
+        owner_id: str,
+        conversation_id: str,
+        messages: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        conversation = self.get_conversation(owner_id, conversation_id)
+        normalized_messages: List[Dict[str, Any]] = []
+        preview = ""
+        now = _utc_now()
+        for item in messages:
+            role = str(item.get("role", "")).strip().lower()
+            content = str(item.get("content", "")).strip()
+            if role not in {"system", "user", "assistant"} or not content:
+                continue
+            metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+            normalized_messages.append(
+                {
+                    "id": uuid4().hex,
+                    "conversation_id": conversation_id,
+                    "owner_id": owner_id,
+                    "role": role,
+                    "content": content,
+                    "metadata_json": json.dumps(metadata),
+                    "created_at": now,
+                }
+            )
+            if role == "assistant" or not preview:
+                preview = content[:220]
+
+        self.client.delete_rows("messages", filters={"conversation_id": f"eq.{conversation_id}"})
+        if normalized_messages:
+            self.client.insert_rows("messages", normalized_messages)
+        self.client.update_rows(
+            "conversations",
+            filters={"id": f"eq.{conversation_id}", "owner_id": f"eq.{owner_id}"},
+            payload={
+                "updated_at": now,
+                "message_count": len(normalized_messages),
+                "preview": preview or conversation.get("preview", ""),
+            },
+        )
+        return self.get_conversation(owner_id, conversation_id)
+
     def log_request(
         self,
         *,
@@ -461,6 +505,11 @@ class SupabaseConversationStore:
         api_key_id = uuid4().hex
         secret = f"mbai_{secrets.token_urlsafe(24)}"
         key_prefix = f"{secret[:14]}…{secret[-4:]}"
+        self.client.update_rows(
+            "api_keys",
+            filters={"owner_id": f"eq.{owner_id}", "revoked_at": "is.null"},
+            payload={"revoked_at": now},
+        )
         row = {
             "id": api_key_id,
             "owner_id": owner_id,

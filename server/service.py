@@ -1445,6 +1445,8 @@ class LocalAssistantService:
         system_preset = str(overrides.get("system_preset") or self.settings.system_preset or DEFAULT_SYSTEM_PRESET)
         generation_defaults = get_generation_defaults(system_preset)
         requested_backend = str(overrides.get("model_backend") or self.settings.model_backend or "auto").lower()
+        requested_max_new_tokens = int(overrides.get("max_new_tokens", generation_defaults["max_new_tokens"]))
+        clamped_max_new_tokens = max(32, min(requested_max_new_tokens, self.settings.max_completion_tokens))
         return {
             "model_backend": requested_backend,
             "model": str(overrides.get("model") or self._default_chat_model(requested_backend)).strip(),
@@ -1457,11 +1459,11 @@ class LocalAssistantService:
             "site_context": str(overrides.get("site_context") or "").strip(),
             "system_preset": system_preset,
             "system_prompt": self._default_system_prompt(system_preset, str(overrides.get("system_prompt") or "")),
-            "temperature": float(overrides.get("temperature", generation_defaults["temperature"])),
-            "top_p": float(overrides.get("top_p", generation_defaults["top_p"])),
+            "temperature": max(0.0, min(float(overrides.get("temperature", generation_defaults["temperature"])), 2.0)),
+            "top_p": max(0.0, min(float(overrides.get("top_p", generation_defaults["top_p"])), 1.0)),
             "top_k": int(overrides.get("top_k", generation_defaults["top_k"])),
             "repetition_penalty": float(overrides.get("repetition_penalty", generation_defaults["repetition_penalty"])),
-            "max_new_tokens": int(overrides.get("max_new_tokens", generation_defaults["max_new_tokens"])),
+            "max_new_tokens": clamped_max_new_tokens,
             "retrieval_top_k": int(overrides.get("retrieval_top_k", self.settings.retrieval_top_k)),
             "disable_retrieval": bool(overrides.get("disable_retrieval", self.settings.disable_retrieval)),
             "response_mode": str(overrides.get("response_mode", self.settings.response_mode or "assistant")).lower(),
@@ -2228,6 +2230,12 @@ class LocalAssistantService:
             "response_mode": self.settings.response_mode,
             "semantic_retrieval_enabled": self.settings.semantic_retrieval_enabled,
             "api_key_self_serve_enabled": self.settings.api_key_self_serve_enabled,
+            "generated_key_rate_limits": {
+                "minute": self.settings.generated_key_rate_limit_minute,
+                "hour": self.settings.generated_key_rate_limit_hour,
+                "day": self.settings.generated_key_rate_limit_day,
+            },
+            "max_completion_tokens": self.settings.max_completion_tokens,
         }
 
     def app_config_payload(self) -> Dict[str, Any]:
@@ -2280,6 +2288,12 @@ class LocalAssistantService:
             "memory_enabled": True,
             "semantic_retrieval_enabled": self.settings.semantic_retrieval_enabled,
             "api_key_self_serve_enabled": self.settings.api_key_self_serve_enabled,
+            "generated_key_rate_limits": {
+                "minute": self.settings.generated_key_rate_limit_minute,
+                "hour": self.settings.generated_key_rate_limit_hour,
+                "day": self.settings.generated_key_rate_limit_day,
+            },
+            "max_completion_tokens": self.settings.max_completion_tokens,
         }
 
     def list_models_payload(self) -> Dict[str, Any]:

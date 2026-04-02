@@ -54,6 +54,8 @@ class ConversationStore:
                     system_preset TEXT NOT NULL,
                     system_prompt TEXT NOT NULL,
                     settings_json TEXT NOT NULL DEFAULT '{}',
+                    message_count INTEGER NOT NULL DEFAULT 0,
+                    preview TEXT NOT NULL DEFAULT '',
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
@@ -124,6 +126,10 @@ class ConversationStore:
             conversation_columns = {row["name"] for row in connection.execute("PRAGMA table_info(conversations)").fetchall()}
             if "owner_id" not in conversation_columns:
                 connection.execute("ALTER TABLE conversations ADD COLUMN owner_id TEXT NOT NULL DEFAULT ''")
+            if "message_count" not in conversation_columns:
+                connection.execute("ALTER TABLE conversations ADD COLUMN message_count INTEGER NOT NULL DEFAULT 0")
+            if "preview" not in conversation_columns:
+                connection.execute("ALTER TABLE conversations ADD COLUMN preview TEXT NOT NULL DEFAULT ''")
             request_log_columns = {row["name"] for row in connection.execute("PRAGMA table_info(request_logs)").fetchall()}
             if "owner_id" not in request_log_columns:
                 connection.execute("ALTER TABLE request_logs ADD COLUMN owner_id TEXT")
@@ -340,6 +346,58 @@ class ConversationStore:
             "metadata": metadata or {},
             "created_at": now,
         }
+
+    def replace_conversation_messages(
+        self,
+        owner_id: str,
+        conversation_id: str,
+        messages: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        conversation = self.get_conversation(owner_id, conversation_id)
+        normalized_messages: List[Dict[str, Any]] = []
+        preview = ""
+        for item in messages:
+            role = str(item.get("role", "")).strip().lower()
+            content = str(item.get("content", "")).strip()
+            if role not in {"system", "user", "assistant"} or not content:
+                continue
+            metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+            normalized_messages.append({"role": role, "content": content, "metadata": metadata})
+            if role == "assistant" or not preview:
+                preview = content[:220]
+
+        now = _utc_now()
+        with self._connect() as connection:
+            connection.execute("DELETE FROM messages WHERE conversation_id = ?", (conversation_id,))
+            for item in normalized_messages:
+                connection.execute(
+                    """
+                    INSERT INTO messages (conversation_id, role, content, metadata_json, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        conversation_id,
+                        item["role"],
+                        item["content"],
+                        json.dumps(item.get("metadata") or {}),
+                        now,
+                    ),
+                )
+            connection.execute(
+                """
+                UPDATE conversations
+                SET updated_at = ?, message_count = ?, preview = ?
+                WHERE id = ? AND owner_id = ?
+                """,
+                (
+                    now,
+                    len(normalized_messages),
+                    preview or conversation.get("preview", ""),
+                    conversation_id,
+                    owner_id,
+                ),
+            )
+        return self.get_conversation(owner_id, conversation_id)
 
     def log_request(
         self,
@@ -614,6 +672,14 @@ class ConversationStore:
             "usage_count": 0,
         }
         with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE api_keys
+                SET revoked_at = ?
+                WHERE owner_id = ? AND revoked_at IS NULL
+                """,
+                (now, owner_id),
+            )
             connection.execute(
                 """
                 INSERT INTO api_keys (id, owner_id, label, key_prefix, key_hash, rate_limit_json, created_at, last_used_at, revoked_at, usage_count)
