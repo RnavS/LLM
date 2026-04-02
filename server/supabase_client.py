@@ -204,9 +204,7 @@ class SupabaseClient:
             if exc.code == 406:
                 return SupabaseResponse(body={}, headers={}, status_code=406)
             parsed_body = self._decode_body(raw_body)
-            message = parsed_body.get("message") if isinstance(parsed_body, dict) else ""
-            hint = parsed_body.get("hint") if isinstance(parsed_body, dict) else ""
-            detail = " ".join(part for part in (str(message).strip(), str(hint).strip()) if part).strip()
+            detail = self._extract_error_detail(parsed_body, raw_body)
             raise ConnectionError(detail or raw_body or f"Supabase returned HTTP {exc.code}.") from exc
         except error.URLError as exc:
             raise ConnectionError("Could not reach Supabase.") from exc
@@ -219,3 +217,20 @@ class SupabaseClient:
             return json.loads(raw_body)
         except json.JSONDecodeError:
             return raw_body
+
+    @staticmethod
+    def _extract_error_detail(parsed_body: Any, raw_body: str) -> str:
+        if isinstance(parsed_body, dict):
+            parts: list[str] = []
+            for key in ("message", "msg", "error_description", "error", "hint", "code"):
+                value = parsed_body.get(key)
+                if value is None:
+                    continue
+                text = str(value).strip()
+                if not text or text.lower() == "none":
+                    continue
+                if text not in parts:
+                    parts.append(text)
+            if parts:
+                return " ".join(parts).strip()
+        return raw_body.strip()
