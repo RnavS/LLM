@@ -2229,7 +2229,7 @@ class LocalAssistantService:
             "local_only": not self.settings.web_search_enabled,
             "response_mode": self.settings.response_mode,
             "semantic_retrieval_enabled": self.settings.semantic_retrieval_enabled,
-            "api_key_self_serve_enabled": self.settings.api_key_self_serve_enabled,
+            "api_key_self_serve_enabled": True,
             "generated_key_rate_limits": {
                 "minute": self.settings.generated_key_rate_limit_minute,
                 "hour": self.settings.generated_key_rate_limit_hour,
@@ -2287,7 +2287,7 @@ class LocalAssistantService:
             "model_loaded": self.runtime is not None or self._supports_chat_backend(active_backend),
             "memory_enabled": True,
             "semantic_retrieval_enabled": self.settings.semantic_retrieval_enabled,
-            "api_key_self_serve_enabled": self.settings.api_key_self_serve_enabled,
+            "api_key_self_serve_enabled": True,
             "generated_key_rate_limits": {
                 "minute": self.settings.generated_key_rate_limit_minute,
                 "hour": self.settings.generated_key_rate_limit_hour,

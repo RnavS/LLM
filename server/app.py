@@ -565,17 +565,13 @@ async def delete_profile_memory_item(request: Request, memory_id: str) -> Dict[s
 
 @app.get("/api/keys", dependencies=[Depends(require_app_session)])
 async def list_generated_keys(request: Request) -> Dict[str, Any]:
-    settings, _, store, _ = _load_state(request.app)
-    if not settings.api_key_self_serve_enabled:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    _, _, store, _ = _load_state(request.app)
     return {"data": store.list_api_keys(get_request_owner_id(request))}
 
 
 @app.post("/api/keys", dependencies=[Depends(require_app_session)])
 async def create_generated_key(request: Request, payload: ApiKeyCreateRequest) -> Dict[str, Any]:
     settings, _, store, _ = _load_state(request.app)
-    if not settings.api_key_self_serve_enabled:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     created = store.create_api_key(
         get_request_owner_id(request),
         payload.label or "Project key",
@@ -593,9 +589,7 @@ async def create_generated_key(request: Request, payload: ApiKeyCreateRequest) -
 
 @app.delete("/api/keys/{key_id}", dependencies=[Depends(require_app_session)])
 async def revoke_generated_key(request: Request, key_id: str) -> Dict[str, str]:
-    settings, _, store, _ = _load_state(request.app)
-    if not settings.api_key_self_serve_enabled:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    _, _, store, _ = _load_state(request.app)
     try:
         store.revoke_api_key(get_request_owner_id(request), key_id)
     except KeyError as exc:

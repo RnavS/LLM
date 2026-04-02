@@ -805,25 +805,18 @@ document.addEventListener('DOMContentLoaded', () => {
       prefMaxTokens.value = RECALL_CONFIG.MAX_TOKENS;
       prefTemperature.value = RECALL_CONFIG.TEMPERATURE;
 
-      if (developerSection) {
-        developerSection.style.display = runtimeConfig.api_key_self_serve_enabled ? '' : 'none';
-      }
+      if (developerSection) developerSection.style.display = '';
       renderApiKeySafety(runtimeConfig?.generated_key_rate_limits || null);
       renderApiExample();
     } catch {
       RECALL_CONFIG.API_ENDPOINT = apiUrl('/api/chat/completions');
-      if (developerSection) developerSection.style.display = 'none';
+      if (developerSection) developerSection.style.display = '';
       renderApiKeySafety(null);
       renderApiExample();
     }
   }
 
   async function loadSavedApiKey() {
-    if (!runtimeConfig?.api_key_self_serve_enabled) {
-      clearApiKeyVisualState();
-      return;
-    }
-
     const savedKey = localStorage.getItem('recall_api_key');
     if (savedKey && savedKey !== 'local-model') {
       RECALL_CONFIG.API_KEY = savedKey;
@@ -874,8 +867,16 @@ document.addEventListener('DOMContentLoaded', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ label: 'MedBrief UI key' })
       });
-      if (!response.ok) throw new Error('Key generation failed');
-      const payload = await response.json();
+      const rawText = await response.text();
+      let payload = {};
+      try {
+        payload = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        payload = {};
+      }
+      if (!response.ok) {
+        throw new Error(payload.detail || payload.message || rawText || 'Key generation failed');
+      }
       const key = payload.api_key || '';
       currentApiKeyId = payload.record?.id || '';
       if (currentApiKeyId) localStorage.setItem('recall_api_key_id', currentApiKeyId);
@@ -886,8 +887,8 @@ document.addEventListener('DOMContentLoaded', () => {
       renderApiKeyMeta(payload.record || null);
       revokeApiKeyBtn.style.display = 'inline-flex';
       generateApiKeyBtn.textContent = 'Regenerate API Key';
-    } catch {
-      appendSystemMessage('Unable to generate an API key right now.');
+    } catch (error) {
+      appendSystemMessage(error.message || 'Unable to generate an API key right now.');
     }
   }
 
